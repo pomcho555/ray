@@ -6,6 +6,7 @@ from typing import Optional, Dict, TYPE_CHECKING
 
 import jinja2
 import yaml
+import runfiles
 
 from ray_release.config import (
     RELEASE_PACKAGE_DIR,
@@ -30,7 +31,9 @@ class TestEnvironment(dict):
     pass
 
 
+_runfiles = runfiles.Create()
 _test_env = None
+_REPO_NAME = "com_github_ray_project_ray"
 
 
 def get_test_environment():
@@ -73,7 +76,7 @@ def load_and_render_yaml_template(
     if not template_path:
         return None
 
-    if not os.path.exists(template_path):
+    if not os.path.isfile(template_path):
         raise ReleaseTestConfigError(
             f"Cannot load yaml template from {template_path}: Path not found."
         )
@@ -98,12 +101,27 @@ def render_yaml_template(template: str, env: Optional[Dict] = None):
         ) from e
 
 
+def _norm_path_join(*args):
+    return os.path.normpath(os.path.join(*args))
+
+
+def _runfiles_path(*args):
+    return _runfiles.Rlocation(os.path.join(_REPO_NAME, _norm_path_join(*args)))
+
+
 def get_cluster_env_path(test: "Test") -> str:
+    working_dir = test.get("working_dir", "")
     cluster_env_file = test["cluster"]["cluster_env"]
-    cluster_env_path = os.path.join(
-        RELEASE_PACKAGE_DIR, test.get("working_dir", ""), cluster_env_file
+    f = _runfiles_path("release", working_dir, cluster_env_file)
+    if os.path.isfile(f):
+        return f
+    return os.path.normpath(
+        os.path.join(
+            RELEASE_PACKAGE_DIR,
+            working_dir,
+            cluster_env_file,
+        )
     )
-    return cluster_env_path
 
 
 def load_test_cluster_env(test: "Test", ray_wheels_url: str) -> Optional[Dict]:
@@ -144,12 +162,19 @@ def populate_cluster_env_variables(test: "Test", ray_wheels_url: str) -> Dict:
 
 def load_test_cluster_compute(test: "Test") -> Optional[Dict]:
     cluster_compute_file = test["cluster"]["cluster_compute"]
-    cluster_compute_path = os.path.join(
-        RELEASE_PACKAGE_DIR, test.get("working_dir", ""), cluster_compute_file
-    )
-    env = populate_cluster_compute_variables(test)
+    working_dir = test.get("working_dir", "")
+    f = _runfiles_path("release", working_dir, cluster_compute_file)
+    if not os.path.isfile(f):
+        f = os.path.normpath(
+            os.path.join(
+                RELEASE_PACKAGE_DIR,
+                working_dir,
+                cluster_compute_file,
+            )
+        )
 
-    return load_and_render_yaml_template(cluster_compute_path, env=env)
+    env = populate_cluster_compute_variables(test)
+    return load_and_render_yaml_template(f, env=env)
 
 
 def populate_cluster_compute_variables(test: "Test") -> Dict:

@@ -1,5 +1,6 @@
 from unittest import mock
 from typing import List, Dict
+
 from ray_release.scripts.ray_bisect import _bisect
 from ray_release.config import Test
 

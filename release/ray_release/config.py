@@ -4,6 +4,7 @@ import os
 import re
 from typing import Dict, List, Optional, Tuple, Any
 
+import runfiles
 import jsonschema
 import yaml
 from ray_release.anyscale_util import find_cloud_by_name
@@ -50,9 +51,15 @@ DEFAULT_PYTHON_VERSION = tuple(
 
 RELEASE_PACKAGE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-RELEASE_TEST_SCHEMA_FILE = os.path.join(
-    RELEASE_PACKAGE_DIR, "ray_release", "schema.json"
+_runfiles = runfiles.Create()
+_REPO_NAME = "com_github_ray_project_ray"
+RELEASE_TEST_SCHEMA_FILE = _runfiles.Rlocation(
+    os.path.join(_REPO_NAME, "release", "ray_release", "schema.json")
 )
+if not os.path.isfile(RELEASE_TEST_SCHEMA_FILE):
+    RELEASE_TEST_SCHEMA_FILE = os.path.join(
+        RELEASE_PACKAGE_DIR, "ray_release", "schema.json"
+    )
 
 
 def read_and_validate_release_test_collection(

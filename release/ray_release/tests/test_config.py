@@ -3,6 +3,7 @@ import sys
 import yaml
 import pytest
 
+import runfiles
 from ray_release.config import (
     read_and_validate_release_test_collection,
     Test,
@@ -13,8 +14,8 @@ from ray_release.config import (
 )
 from ray_release.exception import ReleaseTestConfigError
 
-TEST_COLLECTION_FILE = os.path.join(
-    os.path.dirname(__file__), "..", "..", "release_tests.yaml"
+_TEST_COLLECTION_FILE = runfiles.Create().Rlocation(
+    os.path.join("com_github_ray_project_ray", "release", "release_tests.yaml"),
 )
 
 
@@ -219,7 +220,7 @@ def test_compute_config_invalid_ebs():
 
 
 def test_load_and_validate_test_collection_file():
-    read_and_validate_release_test_collection(TEST_COLLECTION_FILE)
+    read_and_validate_release_test_collection(_TEST_COLLECTION_FILE)
 
 
 if __name__ == "__main__":

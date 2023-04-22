@@ -1,4 +1,13 @@
-load("@rules_python//python:defs.bzl", "py_test")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+load("@py_deps_buildkite//:requirements.bzl", bk_require = "requirement")
+
+compile_pip_requirements(
+    name = "requirements_buildkite",
+    requirements_in = "requirements_buildkite.in",
+    requirements_txt = "requirements_buildkite.txt",
+    visibility = ["//visibility:private"],
+)
 
 test_srcs = glob(["**/*.py"])
 
@@ -186,16 +195,15 @@ py_test(
     ],
 )
 
-
 ####
 # AIR smoke tests
 ####
-
 
 py_test(
     name = "air_benchmark_xgboost_smoke_test",
     size = "small",
     srcs = test_srcs,
+    args = ["--smoke-test"],
     main = "air_tests/air_benchmarks/workloads/xgboost_benchmark.py",
     tags = [
         "exclusive",
@@ -205,13 +213,16 @@ py_test(
         "//:ray_lib",
         "//python/ray/air:ml_lib",
     ],
-    args = ["--smoke-test"]
 )
 
 py_test(
     name = "air_benchmark_data_smoke_test",
     size = "small",
     srcs = test_srcs,
+    args = [
+        "--dataset-size-gb=1",
+        "--num-workers=1",
+    ],
     main = "air_tests/air_benchmarks/workloads/data_benchmark.py",
     tags = [
         "exclusive",
@@ -221,29 +232,35 @@ py_test(
         "//:ray_lib",
         "//python/ray/air:ml_lib",
     ],
-    args = ["--dataset-size-gb=1", "--num-workers=1"]
 )
 
 py_test(
-     name = "air_benchmark_gpu_batch_prediction_smoke_test",
-     size = "small",
-     srcs = test_srcs,
-     main = "air_tests/air_benchmarks/workloads/gpu_batch_prediction.py",
-     tags = [
-         "exclusive",
-         "team:ml",
-     ],
-     deps = [
-         "//:ray_lib",
-         "//python/ray/air:ml_lib",
-     ],
-     args = ["--data-size-gb=1", "--smoke-test"]
+    name = "air_benchmark_gpu_batch_prediction_smoke_test",
+    size = "small",
+    srcs = test_srcs,
+    args = [
+        "--data-size-gb=1",
+        "--smoke-test",
+    ],
+    main = "air_tests/air_benchmarks/workloads/gpu_batch_prediction.py",
+    tags = [
+        "exclusive",
+        "team:ml",
+    ],
+    deps = [
+        "//:ray_lib",
+        "//python/ray/air:ml_lib",
+    ],
 )
 
 py_test(
     name = "air_benchmark_pytorch_training_e2e_smoke_test",
     size = "small",
     srcs = test_srcs,
+    args = [
+        "--data-size-gb=1",
+        "--smoke-test",
+    ],
     main = "air_tests/air_benchmarks/workloads/pytorch_training_e2e.py",
     tags = [
         "exclusive",
@@ -253,13 +270,22 @@ py_test(
         "//:ray_lib",
         "//python/ray/air:ml_lib",
     ],
-    args = ["--data-size-gb=1", "--smoke-test"]
 )
 
 py_test(
     name = "air_benchmark_tensorflow_smoke_test",
     size = "large",
     srcs = test_srcs,
+    args = [
+        "run",
+        "--num-runs=1",
+        "--num-epochs=1",
+        "--num-workers=1",
+        "--cpus-per-worker=1",
+        "--batch-size=1",
+        "--smoke-test",
+        "--local",
+    ],
     main = "air_tests/air_benchmarks/workloads/tensorflow_benchmark.py",
     tags = [
         "exclusive",
@@ -269,13 +295,22 @@ py_test(
         "//:ray_lib",
         "//python/ray/air:ml_lib",
     ],
-    args = ["run", "--num-runs=1", "--num-epochs=1", "--num-workers=1", "--cpus-per-worker=1", "--batch-size=1", "--smoke-test", "--local"]
 )
 
 py_test(
     name = "air_benchmark_torch_smoke_test",
     size = "large",
     srcs = test_srcs,
+    args = [
+        "run",
+        "--num-runs=1",
+        "--num-epochs=1",
+        "--num-workers=1",
+        "--cpus-per-worker=1",
+        "--batch-size=1",
+        "--smoke-test",
+        "--local",
+    ],
     main = "air_tests/air_benchmarks/workloads/torch_benchmark.py",
     tags = [
         "exclusive",
@@ -285,7 +320,6 @@ py_test(
         "//:ray_lib",
         "//python/ray/air:ml_lib",
     ],
-    args = ["run", "--num-runs=1", "--num-epochs=1", "--num-workers=1", "--cpus-per-worker=1", "--batch-size=1", "--smoke-test", "--local"]
 )
 
 py_test(
@@ -294,6 +328,12 @@ py_test(
     # (runtime is shorter when air_benchmark_torch_smoke_test is executed first)
     size = "medium",
     srcs = test_srcs,
+    args = [
+        "--num-runs=1",
+        "--num-trials=1",
+        "--num-workers=1",
+        "--smoke-test",
+    ],
     main = "air_tests/air_benchmarks/workloads/tune_torch_benchmark.py",
     tags = [
         "exclusive",
@@ -303,80 +343,180 @@ py_test(
         "//:ray_lib",
         "//python/ray/air:ml_lib",
     ],
-    args = ["--num-runs=1", "--num-trials=1", "--num-workers=1", "--smoke-test"]
 )
-
 
 ####
 # RELEASE TEST INFRA unit tests
 ####
 
+py_library(
+    name = "ray_release",
+    srcs = glob(
+        ["ray_release/**/*.py"],
+        exclude = ["ray_release/tests/*.py"],
+    ),
+    data = glob(["ray_release/environments/*.env"]) + [
+        "ray_release/buildkite/aws_instance_types.csv",
+        "ray_release/schema.json",
+    ],
+    imports = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        bk_require("anyscale"),
+        bk_require("bazel-runfiles"),
+        bk_require("boto3"),
+        bk_require("botocore"),
+        bk_require("click"),
+        bk_require("jinja2"),
+        bk_require("retry"),
+    ],
+)
+
+py_library(
+    name = "test_utils",
+    srcs = ["ray_release/tests/utils.py"],
+    imports = ["."],
+    visibility = ["//visibility:private"],
+)
+
 py_test(
     name = "test_alerts",
-    tags = ["team:ci", "release_unit"],
     size = "small",
-    srcs = ["ray_release/tests/test_alerts.py"]
+    srcs = ["ray_release/tests/test_alerts.py"],
+    tags = [
+        "release_unit",
+        "team:ci",
+    ],
+    deps = [
+        ":ray_release",
+        bk_require("pytest"),
+    ],
 )
 
 py_test(
     name = "test_anyscale_job_wrapper",
-    tags = ["team:ci", "release_unit"],
     size = "small",
-    srcs = ["ray_release/tests/test_anyscale_job_wrapper.py"]
+    srcs = ["ray_release/tests/test_anyscale_job_wrapper.py"],
+    tags = [
+        "release_unit",
+        "team:ci",
+    ],
+    deps = [
+        ":ray_release",
+        bk_require("pytest"),
+    ],
 )
 
 py_test(
     name = "test_buildkite",
-    tags = ["team:ci", "release_unit"],
     size = "small",
-    srcs = ["ray_release/tests/test_buildkite.py"]
+    srcs = ["ray_release/tests/test_buildkite.py"],
+    tags = [
+        "release_unit",
+        "team:ci",
+    ],
+    deps = [
+        ":ray_release",
+        bk_require("pyyaml"),
+        bk_require("pytest"),
+    ],
 )
 
 py_test(
     name = "test_cluster_manager",
-    tags = ["team:ci", "release_unit"],
     size = "small",
-    srcs = ["ray_release/tests/test_cluster_manager.py"]
+    srcs = ["ray_release/tests/test_cluster_manager.py"],
+    tags = [
+        "release_unit",
+        "team:ci",
+    ],
+    deps = [
+        ":ray_release",
+        ":test_utils",
+        bk_require("freezegun"),
+        bk_require("pytest"),
+    ],
 )
 
 py_test(
     name = "test_config",
-    tags = ["team:ci", "release_unit"],
     size = "small",
     srcs = ["ray_release/tests/test_config.py"],
-    data = ["release_tests.yaml"],
+    data = glob(
+        ["**/*.yaml"],
+        exclude = ["ray_release/**/*.yaml"],
+    ) + [
+        "//python/ray/autoscaler/aws:test_configs",
+    ],
+    tags = [
+        "release_unit",
+        "team:ci",
+    ],
+    deps = [
+        ":ray_release",
+        bk_require("pytest"),
+    ],
 )
 
 py_test(
     name = "test_env",
-    tags = ["team:ci", "release_unit"],
     size = "small",
-    srcs = ["ray_release/tests/test_env.py"]
+    srcs = ["ray_release/tests/test_env.py"],
+    tags = [
+        "release_unit",
+        "team:ci",
+    ],
+    deps = [
+        ":ray_release",
+        bk_require("pytest"),
+    ],
 )
 
 py_test(
     name = "test_glue",
-    tags = ["team:ci", "release_unit"],
     size = "small",
-    srcs = ["ray_release/tests/test_glue.py"]
+    srcs = ["ray_release/tests/test_glue.py"],
+    tags = [
+        "release_unit",
+        "team:ci",
+    ],
+    deps = [
+        ":ray_release",
+        ":test_utils",
+        bk_require("pytest"),
+    ],
 )
 
 py_test(
     name = "test_run_script",
-    tags = ["team:ci", "release_unit"],
     size = "small",
     srcs = ["ray_release/tests/test_run_script.py"],
     data = [
-        "run_release_test.sh",
         "ray_release/tests/_test_catch_args.py",
         "ray_release/tests/_test_run_release_test_sh.py",
+        "run_release_test.sh",
+    ],
+    tags = [
+        "release_unit",
+        "team:ci",
+    ],
+    deps = [
+        ":ray_release",
+        bk_require("pytest"),
     ],
 )
 
 py_test(
     name = "test_wheels",
-    tags = ["team:ci", "release_unit"],
     size = "small",
     srcs = ["ray_release/tests/test_wheels.py"],
-    deps = ["//:ray_lib"],
+    tags = [
+        "release_unit",
+        "team:ci",
+    ],
+    deps = [
+        ":ray_release",
+        "//:ray_lib",
+        bk_require("pytest"),
+    ],
 )
